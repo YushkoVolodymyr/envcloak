@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.omc/
+.idea/
+.venv/
+venv/
+*.bak
+.env
+.env.*
+!.env.example

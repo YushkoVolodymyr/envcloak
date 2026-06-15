@@ -1,0 +1,12 @@
+{
+  "reveal_keys": [
+    "NODE_ENV", "ENV", "ENVIRONMENT", "APP_ENV", "*_ENV",
+    "LOG_LEVEL", "LOGLEVEL", "DEBUG", "VERBOSE", "TRACE",
+    "PORT", "*_PORT",
+    "TZ", "LANG", "LC_*"
+  ],
+  "reveal_boolean_values": true,
+  "reveal_numeric_values": false,
+  "partial_reveal": 0,
+  "allowed_path_globs": []
+}

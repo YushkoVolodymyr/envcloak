@@ -1,0 +1,8 @@
+# Normalize line endings: store text as LF in the repo.
+* text=auto eol=lf
+
+# These must stay LF even on Windows checkouts.
+*.sh   text eol=lf
+*.py   text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
