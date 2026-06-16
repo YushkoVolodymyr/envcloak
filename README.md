@@ -6,6 +6,8 @@ enough to actually debug with.
 
 - **Zero dependencies.** Pure Python 3.8+ standard library. No pip, no npm.
 - **Self-contained.** Everything lives in this one folder.
+- **Installable as a Claude Code plugin.** One command registers the MCP server
+  and the `.env`-blocking hook — see [Install](#install-as-a-claude-code-plugin-recommended).
 - **Tested.** `python3 -m unittest` (33 tests).
 
 ## How it works
@@ -73,7 +75,47 @@ project root you launch in — a hook is what makes it global and reliable.)
 | `env_create_file`   | Create a new env file (`confirm` to overwrite)             |
 | `env_delete_file`   | Delete a file (`confirm` required)                         |
 
-## Install
+## Install as a Claude Code plugin (recommended)
+
+env-guard ships as a self-contained plugin: installing it registers the
+`env-guard` MCP server **and** wires the `.env`-blocking hook for you — no
+manual `settings.json` editing. The repo is its own marketplace, so:
+
+```text
+# In Claude Code:
+/plugin marketplace add YushkoVolodymyr/env-guard
+/plugin install env-guard@env-guard
+```
+
+Then restart Claude Code (or run `/hooks`). Verify with:
+
+```bash
+claude mcp list        # -> env-guard: ... ✔ Connected
+```
+
+Requirement: `python3` on PATH (the MCP server and hook are launched as
+`python3`). Zero Python dependencies.
+
+What the plugin activates (in every project, while enabled):
+
+- the **`env-guard` MCP server** (the `env_read` / `env_set_value` / … tools);
+- a **`PreToolUse` hook** that blocks raw `.env` access via
+  `Read`/`Edit`/`Write`/`Grep`/`Glob`/`Bash`;
+- a **`UserPromptSubmit` hook** that blocks `@`-mentions of `.env` files.
+  (The manual installer below leaves this `@`-mention guard *off* by default;
+  the plugin turns it *on* — a stronger default for a security tool.)
+
+Example/template files (`.env.example`, `.env.sample`, `.env.template`,
+`.env.dist`, `.env.schema`) carry no secrets and stay readable.
+
+Disable or remove anytime with `/plugin` (or `/plugin uninstall env-guard@env-guard`).
+
+> A plugin cannot ship `permissions.deny` entries, so the hook is the
+> enforcement mechanism (it covers every tool + `@`-mentions, which deny rules
+> alone do not). If you also want belt-and-suspenders `permissions.deny`
+> wildcards, add them via the manual installer or your own `settings.json`.
+
+## Install manually (without the plugin)
 
 Requirements: `python3` and the `claude` CLI on PATH.
 
