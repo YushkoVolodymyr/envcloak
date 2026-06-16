@@ -55,7 +55,7 @@ empty values. Edit the list in [`config.json`](./config.json).
   overwriting via `env_create_file`).
 
 To make this airtight, the agent must not be able to read env files any other
-way (Read tool, `cat`, grep, an `@`-mention, …). The **plugin does this for
+way (Read tool, `cat`, grep, …). The **plugin does this for
 you** — see [Install](#install-as-a-claude-code-plugin-recommended). It ships a
 `PreToolUse` hook ([`block-env-files.py`](./block-env-files.py)) that blocks
 `.env` access across every project, no matter which directory Claude is launched
@@ -115,9 +115,7 @@ What the plugin activates (in every project, while enabled):
   that the shell would expand to a real `.env`) and blocks copy/move/rename
   commands that would land a protected file under a readable name (secret
   exfiltration). Renaming/moving **between** protected names is allowed
-  (e.g. `mv .env.local .env`);
-- a **`UserPromptSubmit` hook** that blocks `@`-mentions of `.env` files
-  (an `@`-mention would otherwise inline raw secrets, bypassing the tool gate).
+  (e.g. `mv .env.local .env`).
 
 Example/template files (`.env.example`, `.env.sample`, `.env.template`,
 `.env.dist`, `.env.schema`) carry no secrets and stay readable.
@@ -126,8 +124,8 @@ Disable or remove anytime with `/plugin` (or `/plugin uninstall envcloak@envcloa
 
 ## Optional: extra hardening with `permissions.deny`
 
-The hook is the real enforcement — it blocks every tool *and* `@`-mentions,
-which settings denies alone can't. A plugin can't ship `permissions.deny`
+The hook is the real enforcement — it blocks every tool, which settings
+denies alone can't. A plugin can't ship `permissions.deny`
 entries, so if you also want belt-and-suspenders settings-level denies, add
 these to your `~/.claude/settings.json` by hand:
 

@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import envcloak_core as eg  # noqa: E402
 
 SERVER_NAME = "envcloak"
-SERVER_VERSION = "1.1.0"
+SERVER_VERSION = "1.1.1"
 PROTOCOL_VERSION = "2024-11-05"
 
 # Only files that look like env files may be touched (defensive default).

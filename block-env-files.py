@@ -5,11 +5,9 @@ Registered as a user-global hook so it applies regardless of which directory
 Claude is launched from (settings.local.json deny rules only load for the exact
 project root, which is easy to miss in a multi-project workspace).
 
-Handles two events:
+Handles one event:
   * PreToolUse      -> deny Read/Edit/Write/Grep/Glob/Bash that targets a
                        protected .env file (covers subagent tool calls too).
-  * UserPromptSubmit-> block a prompt that @-mentions a protected .env file
-                       (mentions inline file content outside the tool gate).
 
 Protected = basename `.env` or `.env.<suffix>`, EXCEPT example/template files
 (`.env.example`, `.env.sample`, `.env.template`, `.env.dist`, `.env.schema`),
@@ -30,15 +28,12 @@ masked, length-preserving view instead of raw values.
 
 import fnmatch
 import json
-import os
 import re
 import sys
 
 SAFE_SUFFIX = re.compile(r"\.(example|sample|template|dist|schema)$", re.IGNORECASE)
 # a literal .env token as it appears inside a command line (covers / and \ paths)
 BASH_ENV_TOKEN = re.compile(r"""(?:^|[\s=:"'(<>|&;/\\])(\.env(?:\.[A-Za-z0-9_.-]+)?)""")
-# an @-mention of a .env file in a user prompt
-MENTION_ENV = re.compile(r"@(?:[^\s\"']*/)?(\.env(?:\.[A-Za-z0-9_.-]+)?)\b")
 
 ADVICE = "Use the envcloak MCP (env_read) for a masked, safe view."
 
@@ -191,11 +186,6 @@ def deny_tool(reason: str) -> None:
     sys.exit(0)
 
 
-def block_prompt(reason: str) -> None:
-    print(json.dumps({"decision": "block", "reason": reason}))
-    sys.exit(0)
-
-
 def handle_pretooluse(data: dict) -> None:
     tool = data.get("tool_name", "")
     ti = data.get("tool_input", {}) or {}
@@ -218,16 +208,6 @@ def handle_pretooluse(data: dict) -> None:
                 deny_tool(f"{tool} targeting .env files is blocked by policy. {ADVICE}")
 
 
-def handle_prompt(data: dict) -> None:
-    prompt = data.get("prompt", "") or ""
-    for m in MENTION_ENV.finditer(prompt):
-        if is_protected_basename(os.path.basename(m.group(1))):
-            block_prompt(
-                f"This prompt @-mentions a protected env file ('{m.group(1)}'), which "
-                f"would inline its raw secrets. {ADVICE} Re-ask without the @-mention."
-            )
-
-
 def main() -> None:
     try:
         data = json.load(sys.stdin)
@@ -236,8 +216,6 @@ def main() -> None:
     event = data.get("hook_event_name") or data.get("hookEventName")
     if event == "PreToolUse":
         handle_pretooluse(data)
-    elif event == "UserPromptSubmit":
-        handle_prompt(data)
     sys.exit(0)
 
 
