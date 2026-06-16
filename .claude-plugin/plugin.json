@@ -1,6 +1,6 @@
 {
   "name": "envcloak",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Read and edit .env files from Claude Code without ever exposing real secret values. Ships an MCP server that returns a length-preserving, blurred view plus a PreToolUse hook that blocks raw .env access.",
   "author": {
     "name": "Yushko Volodymyr",
@@ -20,7 +20,7 @@
   ],
   "mcpServers": {
     "envcloak": {
-      "command": "python3",
+      "command": "${ENVCLOAK_PYTHON:-python3}",
       "args": ["${CLAUDE_PLUGIN_ROOT}/server.py"]
     }
   }

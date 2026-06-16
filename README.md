@@ -93,14 +93,29 @@ Then restart Claude Code (or run `/hooks`). Verify with:
 claude mcp list        # -> envcloak: ... ✔ Connected
 ```
 
-Requirement: `python3` on PATH (the MCP server and hook are launched as
-`python3`). Zero Python dependencies.
+Requirement: a Python 3 interpreter on PATH. By default the MCP server and
+hooks launch as `python3`; if your machine only has `python` or the Windows
+`py` launcher, set `ENVCLOAK_PYTHON` to the interpreter name (or full path)
+and both will use it:
+
+```bash
+# examples — pick whatever resolves on your machine
+export ENVCLOAK_PYTHON=python     # macOS/Linux with only `python`
+setx ENVCLOAK_PYTHON py           # Windows, py launcher (then restart)
+```
+
+Zero Python dependencies.
 
 What the plugin activates (in every project, while enabled):
 
 - the **`envcloak` MCP server** (the `env_read` / `env_set_value` / … tools);
 - a **`PreToolUse` hook** that blocks raw `.env` access via
-  `Read`/`Edit`/`Write`/`Grep`/`Glob`/`Bash`;
+  `Read`/`Edit`/`Write`/`Grep`/`Glob`/`Bash`. The `Bash` gate covers bash,
+  `cmd.exe` and PowerShell — it blocks reads (including wildcards like `.e*`
+  that the shell would expand to a real `.env`) and blocks copy/move/rename
+  commands that would land a protected file under a readable name (secret
+  exfiltration). Renaming/moving **between** protected names is allowed
+  (e.g. `mv .env.local .env`);
 - a **`UserPromptSubmit` hook** that blocks `@`-mentions of `.env` files
   (an `@`-mention would otherwise inline raw secrets, bypassing the tool gate).
 
