@@ -10,7 +10,7 @@
     {
       "name": "envcloak",
       "description": "Zero-dependency MCP server + PreToolUse hook that lets an agent read and edit .env files through a length-preserving, blurred view — secrets never leave the file. Blocks raw .env access via Read/Edit/Write/Grep/Glob/Bash and @-mentions.",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Yushko Volodymyr",
         "email": "youshko.vladimir@gmail.com"
