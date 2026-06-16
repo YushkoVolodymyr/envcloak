@@ -8,7 +8,7 @@ enough to actually debug with.
 - **Self-contained.** Everything lives in this one folder.
 - **Installable as a Claude Code plugin.** One command registers the MCP server
   and the `.env`-blocking hook — see [Install](#install-as-a-claude-code-plugin-recommended).
-- **Tested.** `python3 -m unittest` (33 tests).
+- **Tested.** `python3 -m unittest` (54 tests).
 
 ## How it works
 
@@ -93,13 +93,27 @@ Then restart Claude Code (or run `/hooks`). Verify with:
 claude mcp list        # -> envcloak: ... ✔ Connected
 ```
 
-Requirement: a Python 3 interpreter on PATH. By default the MCP server and
-hooks launch as `python3`; if your machine only has `python` or the Windows
-`py` launcher, set `ENVCLOAK_PYTHON` to the interpreter name (or full path)
-and both will use it:
+Requirement: a Python 3.8+ interpreter on PATH. The MCP server and hooks launch
+as `${ENVCLOAK_PYTHON:-python3}`, and a `SessionStart` hook **auto-detects** the
+right interpreter so you usually don't have to: it probes `python3`, `python`,
+`python3.x` and the Windows `py -3` launcher, **runs** each candidate to confirm
+it actually works (this skips the Microsoft Store `python3` alias, which
+resolves on PATH but exits without running), then bakes the winner's absolute
+path into `~/.claude/settings.json` → `env.ENVCLOAK_PYTHON`. **Restart Claude
+Code once** after first install so the server and hook pick it up.
+
+The detector is `tools/resolve-python.sh` (one POSIX-shell hook entry covering
+Linux, macOS, and Windows under Git Bash / MSYS2). On **native Windows with no
+POSIX shell**, run the PowerShell equivalent once, then restart:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\resolve-python.ps1
+```
+
+You can always override detection by setting `ENVCLOAK_PYTHON` yourself (it
+takes priority):
 
 ```bash
-# examples — pick whatever resolves on your machine
 export ENVCLOAK_PYTHON=python     # macOS/Linux with only `python`
 setx ENVCLOAK_PYTHON py           # Windows, py launcher (then restart)
 ```
@@ -108,6 +122,8 @@ Zero Python dependencies.
 
 What the plugin activates (in every project, while enabled):
 
+- a **`SessionStart` hook** that auto-detects a working Python interpreter and
+  bakes it into `~/.claude/settings.json` (see the requirement note above);
 - the **`envcloak` MCP server** (the `env_read` / `env_set_value` / … tools);
 - a **`PreToolUse` hook** that blocks raw `.env` access via
   `Read`/`Edit`/`Write`/`Grep`/`Glob`/`Bash`. The `Bash` gate covers bash,
@@ -169,7 +185,7 @@ envcloak relies on the global hook instead. They're purely additive.
 ## Develop / test
 
 ```bash
-python3 -m unittest -v          # run the 33 tests
+python3 -m unittest -v          # run the 54 tests
 ```
 
 `envcloak_core.py` is pure logic (parse / blur / edit) and has no I/O, so it is
