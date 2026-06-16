@@ -48,21 +48,27 @@ ENV_KEY = "ENVCLOAK_PYTHON"
 # matched at any depth by Claude Code's gitignore-style rules.
 BASE_PROTECTED_GLOBS = (".env", ".env.*")
 DENY_TOOLS = ("Read", "Edit", "Write")
+
 # Auto-approve the secure path so the fallback never prompts -- and, crucially,
 # is not auto-DENIED in `dontAsk` ("auto") mode, which rejects any tool not
-# matched by name in `permissions.allow`. The server-wide `mcp__envcloak` covers
-# the interactive modes; the explicit per-tool entries are what `dontAsk` matches
-# reliably, so we list every envcloak tool.
-ALLOW_RULES = (
-    "mcp__envcloak",
-    "mcp__envcloak__env_read",
-    "mcp__envcloak__env_set_value",
-    "mcp__envcloak__env_add_key",
-    "mcp__envcloak__env_rename_key",
-    "mcp__envcloak__env_delete_key",
-    "mcp__envcloak__env_replace_range",
-    "mcp__envcloak__env_create_file",
-    "mcp__envcloak__env_delete_file",
+# matched BY NAME in `permissions.allow`.
+#
+# The tool name depends on how envcloak is installed. As a Claude Code *plugin*
+# (the supported path), its MCP tools are namespaced `mcp__plugin_<plugin>_<server>__<tool>`
+# -> `mcp__plugin_envcloak_envcloak__env_read`. A plain (non-plugin) `claude mcp add`
+# install would expose them as `mcp__envcloak__env_read`. We allow BOTH the
+# server-wide and every per-tool entry under each prefix, so `dontAsk` matches
+# regardless of install shape. (A server-wide entry alone did NOT reliably match
+# individual calls in dontAsk; the per-tool entries are the ones that do.)
+ENV_TOOL_NAMES = (
+    "env_read", "env_set_value", "env_add_key", "env_rename_key",
+    "env_delete_key", "env_replace_range", "env_create_file", "env_delete_file",
+)
+_ALLOW_PREFIXES = ("mcp__plugin_envcloak_envcloak", "mcp__envcloak")
+ALLOW_RULES = tuple(
+    rule
+    for prefix in _ALLOW_PREFIXES
+    for rule in (prefix, *(f"{prefix}__{name}" for name in ENV_TOOL_NAMES))
 )
 
 

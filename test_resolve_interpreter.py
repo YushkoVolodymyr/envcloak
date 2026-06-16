@@ -125,10 +125,16 @@ class TestMergePermissions(unittest.TestCase):
         data = {}
         self.assertTrue(ri.merge_permissions(data, _WILDCARD_DENY))
         perms = data["permissions"]
+        # plugin-namespaced names are what dontAsk ("auto") mode actually matches
+        self.assertIn("mcp__plugin_envcloak_envcloak", perms["allow"])
+        self.assertIn("mcp__plugin_envcloak_envcloak__env_read", perms["allow"])
+        # plain (non-plugin) install names kept as a fallback
         self.assertIn("mcp__envcloak", perms["allow"])
-        # explicit per-tool entries are required for dontAsk ("auto") mode
         self.assertIn("mcp__envcloak__env_read", perms["allow"])
-        self.assertIn("mcp__envcloak__env_set_value", perms["allow"])
+        # every tool is covered under both prefixes
+        for name in ri.ENV_TOOL_NAMES:
+            self.assertIn(f"mcp__plugin_envcloak_envcloak__{name}", perms["allow"])
+            self.assertIn(f"mcp__envcloak__{name}", perms["allow"])
         self.assertIn("Read(.env)", perms["deny"])
         self.assertIn("Read(.env.*)", perms["deny"])
         self.assertIn("Write(.env.*)", perms["deny"])

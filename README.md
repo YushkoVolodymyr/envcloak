@@ -169,11 +169,13 @@ your existing rules):
 }
 ```
 
-The `allow` list includes both the server-wide `mcp__envcloak` (for interactive
-modes) **and** every tool by name (`mcp__envcloak__env_read`, …). The per-tool
-entries matter in `dontAsk` / "auto" mode, which auto-denies any tool not matched
-by name in `permissions.allow` — without them the secure `env_read` call is
-rejected there.
+The `allow` list covers the secure tools under **both** name shapes Claude Code
+might use: the plugin-namespaced `mcp__plugin_envcloak_envcloak__<tool>` (what a
+plugin install actually invokes) and the plain `mcp__envcloak__<tool>` (a
+non-plugin `claude mcp add` install) — server-wide *and* per-tool for each. The
+per-tool, correctly-namespaced entries are what `dontAsk` / "auto" mode matches;
+that mode auto-denies any tool not matched by name in `permissions.allow`, so a
+wrong or missing name means the secure `env_read` is rejected there.
 
 The deny globs are **wildcards** (`.env.*` covers every suffix), so by default
 they also cover template files (`.env.example`, `.env.sample`, …) — read those
