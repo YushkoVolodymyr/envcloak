@@ -63,23 +63,17 @@ class TestLoadSettings(unittest.TestCase):
         self.assertFalse(ok)
 
 
-_WILDCARD_DENY = ri.build_deny_rules(ri.BASE_PROTECTED_GLOBS)
+class TestRemovableDenyRules(unittest.TestCase):
+    def test_covers_base_wildcards_and_depth(self):
+        rules = ri.removable_deny_rules()
+        for r in ("Read(.env)", "Read(.env.*)", "Read(**/.env)", "Read(**/.env.*)",
+                  "Edit(.env)", "Write(.env.*)"):
+            self.assertIn(r, rules)
 
-
-class TestDenyRules(unittest.TestCase):
-    def test_wildcard_not_enumerated(self):
-        rules = ri.build_deny_rules(ri.BASE_PROTECTED_GLOBS)
-        self.assertEqual(set(rules), {
-            "Read(.env)", "Read(.env.*)",
-            "Edit(.env)", "Edit(.env.*)",
-            "Write(.env)", "Write(.env.*)",
-        })
-
-    def test_build_deny_rules_uses_given_globs(self):
-        rules = ri.build_deny_rules(["config/*.env"])
-        self.assertEqual(set(rules), {
-            "Read(config/*.env)", "Edit(config/*.env)", "Write(config/*.env)",
-        })
+    def test_covers_legacy_enumerated_suffixes(self):
+        rules = ri.removable_deny_rules()
+        self.assertIn("Read(.env.local)", rules)
+        self.assertIn("Read(.env.production)", rules)
 
 
 class TestLoadProtectedGlobs(unittest.TestCase):
@@ -121,45 +115,65 @@ class TestLoadProtectedGlobs(unittest.TestCase):
 
 
 class TestMergePermissions(unittest.TestCase):
-    def test_adds_deny_and_allow_to_empty(self):
+    def test_adds_allow_under_both_prefixes_no_deny(self):
         data = {}
-        self.assertTrue(ri.merge_permissions(data, _WILDCARD_DENY))
+        self.assertTrue(ri.merge_permissions(data))
         perms = data["permissions"]
-        # plugin-namespaced names are what dontAsk ("auto") mode actually matches
+        # plugin-namespaced names are what auto mode actually matches
         self.assertIn("mcp__plugin_envcloak_envcloak", perms["allow"])
         self.assertIn("mcp__plugin_envcloak_envcloak__env_read", perms["allow"])
         # plain (non-plugin) install names kept as a fallback
-        self.assertIn("mcp__envcloak", perms["allow"])
         self.assertIn("mcp__envcloak__env_read", perms["allow"])
-        # every tool is covered under both prefixes
         for name in ri.ENV_TOOL_NAMES:
             self.assertIn(f"mcp__plugin_envcloak_envcloak__{name}", perms["allow"])
             self.assertIn(f"mcp__envcloak__{name}", perms["allow"])
-        self.assertIn("Read(.env)", perms["deny"])
-        self.assertIn("Read(.env.*)", perms["deny"])
-        self.assertIn("Write(.env.*)", perms["deny"])
+        # we no longer inject any .env deny rules
+        self.assertEqual(perms.get("deny", []), [])
+
+    def test_retracts_env_deny_rules(self):
+        data = {"permissions": {"deny": [
+            "Read(.env)", "Read(.env.*)", "Read(**/.env)", "Read(**/.env.*)",
+            "Edit(.env)", "Write(.env.*)", "Read(.env.local)",
+            "Read(secrets.txt)",  # unrelated user rule -> must survive
+        ]}}
+        self.assertTrue(ri.merge_permissions(data))
+        self.assertEqual(data["permissions"]["deny"], ["Read(secrets.txt)"])
+
+    def test_retracts_config_derived_env_deny(self):
+        # a glob from allowed_path_globs should also be retracted
+        d = tempfile.mkdtemp()
+        old = os.environ.get("CLAUDE_PLUGIN_ROOT")
+        os.environ["CLAUDE_PLUGIN_ROOT"] = d
+        try:
+            with open(os.path.join(d, "config.json"), "w", encoding="utf-8") as f:
+                json.dump({"allowed_path_globs": ["config/*.env"]}, f)
+            data = {"permissions": {"deny": ["Read(config/*.env)", "Edit(keep.me)"]}}
+            ri.merge_permissions(data)
+            self.assertEqual(data["permissions"]["deny"], ["Edit(keep.me)"])
+        finally:
+            if old is None:
+                os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
+            else:
+                os.environ["CLAUDE_PLUGIN_ROOT"] = old
 
     def test_idempotent_no_duplicates(self):
         data = {}
-        ri.merge_permissions(data, _WILDCARD_DENY)
-        self.assertFalse(ri.merge_permissions(data, _WILDCARD_DENY))  # nothing new
-        deny = data["permissions"]["deny"]
-        self.assertEqual(len(deny), len(set(deny)))
-        self.assertEqual(data["permissions"]["allow"].count("mcp__envcloak"), 1)
+        ri.merge_permissions(data)
+        self.assertFalse(ri.merge_permissions(data))  # nothing new
+        allow = data["permissions"]["allow"]
+        self.assertEqual(len(allow), len(set(allow)))
 
-    def test_preserves_existing_rules_and_order(self):
-        data = {"permissions": {"deny": ["Read(secrets.txt)"], "allow": ["Bash(ls:*)"]}}
-        ri.merge_permissions(data, _WILDCARD_DENY)
-        self.assertEqual(data["permissions"]["deny"][0], "Read(secrets.txt)")
+    def test_preserves_existing_allow_order(self):
+        data = {"permissions": {"allow": ["Bash(ls:*)"]}}
+        ri.merge_permissions(data)
         self.assertEqual(data["permissions"]["allow"][0], "Bash(ls:*)")
-        self.assertIn("mcp__envcloak", data["permissions"]["allow"])
-        self.assertIn("Read(.env)", data["permissions"]["deny"])
+        self.assertIn("mcp__plugin_envcloak_envcloak__env_read", data["permissions"]["allow"])
 
     def test_tolerates_non_list_buckets(self):
         data = {"permissions": {"deny": "oops", "allow": None}}
-        self.assertTrue(ri.merge_permissions(data, _WILDCARD_DENY))
-        self.assertIsInstance(data["permissions"]["deny"], list)
-        self.assertIn("Read(.env)", data["permissions"]["deny"])
+        self.assertTrue(ri.merge_permissions(data))
+        self.assertIsInstance(data["permissions"]["allow"], list)
+        self.assertIn("mcp__plugin_envcloak_envcloak__env_read", data["permissions"]["allow"])
 
 
 class TestMainBake(unittest.TestCase):

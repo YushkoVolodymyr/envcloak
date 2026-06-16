@@ -36,17 +36,27 @@ import tempfile
 MIN_VERSION = (3, 8)
 ENV_KEY = "ENVCLOAK_PYTHON"
 
-# .env files whose raw access we steer the agent away from at the *permission*
-# layer (deny-first: Claude Code skips the tool before it runs, so the agent
-# falls back to the envcloak MCP from the first call instead of being blocked
-# mid-attempt). The PreToolUse hook remains the airtight enforcer (Bash,
-# exfiltration, …); these wildcard globs are the steering layer.
+# IMPORTANT: envcloak does NOT add `.env` deny rules to settings.
 #
-# Wildcards, not an enumerated suffix list: `.env.*` matches every `.env.<x>`
-# (including templates like `.env.example` — pass them through the MCP, or narrow
-# `allowed_path_globs` if you want them raw-readable). `.env` and `.env.*` are
-# matched at any depth by Claude Code's gitignore-style rules.
+# It used to (≤1.0.2). But Claude Code's `auto` permission mode runs an LLM
+# "auto mode classifier" that auto-DENIES a tool when it looks like a way around
+# another rule. With a `Read(.env.*)` deny rule present, calling the secure
+# `env_read` MCP tool is flagged as "circumventing the deny rule by switching
+# tools" and rejected -- so the deny rule we added to *steer* the agent actually
+# *blocks the safe path*. An `allow` entry does not override the classifier.
+#
+# Enforcement of raw reads is the PreToolUse hook's job (it denies Read/Edit/
+# Write/Bash on `.env` in every mode); the MCP is the sanctioned read path. So we
+# (a) allow the MCP tools and (b) actively REMOVE any `.env` deny rules earlier
+# versions baked in, to unbreak `auto` mode. These globs define what to remove.
 BASE_PROTECTED_GLOBS = (".env", ".env.*")
+# Enumerated suffixes the very first releases (1.0.0) wrote; kept so the cleanup
+# retracts them too.
+LEGACY_PROTECTED_GLOBS = (
+    ".env.local", ".env.*.local", ".env.development", ".env.dev",
+    ".env.production", ".env.prod", ".env.staging", ".env.test",
+    ".env.secret", ".env.secrets",
+)
 DENY_TOOLS = ("Read", "Edit", "Write")
 
 # Auto-approve the secure path so the fallback never prompts -- and, crucially,
@@ -103,9 +113,21 @@ def load_protected_globs() -> list:
     return globs
 
 
-def build_deny_rules(globs) -> list:
-    """Cartesian product of the denied tools and the protected globs."""
-    return [f"{tool}({g})" for tool in DENY_TOOLS for g in globs]
+def removable_deny_rules() -> set:
+    """Every `.env` deny rule shape envcloak (or its old README) ever produced.
+
+    Covers the base + legacy globs and the current config's ``allowed_path_globs``,
+    each as `Tool(glob)` and `Tool(**/glob)` (the old README suggested the `**/`
+    forms). Used to retract them from settings so `auto` mode stops flagging the
+    secure MCP read as a deny-rule circumvention.
+    """
+    globs = set(load_protected_globs()) | set(LEGACY_PROTECTED_GLOBS)
+    rules = set()
+    for tool in DENY_TOOLS:
+        for g in globs:
+            rules.add(f"{tool}({g})")
+            rules.add(f"{tool}(**/{g})")
+    return rules
 
 
 def log(*args: object) -> None:
@@ -153,27 +175,39 @@ def atomic_write(path: str, data: dict) -> None:
                 pass
 
 
-def merge_permissions(data: dict, deny_rules) -> bool:
-    """Add envcloak's deny/allow rules to ``permissions`` if missing.
+def merge_permissions(data: dict) -> bool:
+    """Reconcile ``permissions`` for envcloak. Returns True iff anything changed.
 
-    Idempotent and additive: existing rules (and their order) are preserved;
-    only missing entries are appended. Returns True iff anything was added.
+    1. RETRACT any `.env` deny rule envcloak (or its old README) introduced -- in
+       `auto` mode these make the secure `env_read` call get auto-denied as a
+       deny-rule circumvention. Raw-read enforcement stays with the PreToolUse hook.
+    2. ENSURE the allow rules for the MCP tools are present (idempotent, additive;
+       existing user rules and their order are preserved).
     """
     changed = False
     perms = data.get("permissions")
     if not isinstance(perms, dict):
         perms = {}
-    for bucket, rules in (("deny", deny_rules), ("allow", ALLOW_RULES)):
-        existing = perms.get(bucket)
-        if not isinstance(existing, list):
-            existing = []
-        seen = set(existing)
-        for rule in rules:
-            if rule not in seen:
-                existing.append(rule)
-                seen.add(rule)
-                changed = True
-        perms[bucket] = existing
+
+    removable = removable_deny_rules()
+    deny = perms.get("deny")
+    if isinstance(deny, list):
+        kept = [r for r in deny if r not in removable]
+        if len(kept) != len(deny):
+            perms["deny"] = kept
+            changed = True
+
+    allow = perms.get("allow")
+    if not isinstance(allow, list):
+        allow = []
+    seen = set(allow)
+    for rule in ALLOW_RULES:
+        if rule not in seen:
+            allow.append(rule)
+            seen.add(rule)
+            changed = True
+    perms["allow"] = allow
+
     if changed:
         data["permissions"] = perms
     return changed
@@ -224,7 +258,7 @@ def main() -> int:
         env[ENV_KEY] = resolved
         data["env"] = env
 
-    perms_changed = merge_permissions(data, build_deny_rules(load_protected_globs()))
+    perms_changed = merge_permissions(data)
 
     if not (env_changed or perms_changed):
         print(resolved)  # already baked; nothing to do
@@ -234,7 +268,8 @@ def main() -> int:
     if env_changed:
         log(f"baked {ENV_KEY}={resolved} into {path}")
     if perms_changed:
-        log(f"added envcloak .env deny/allow rules to {path} -> permissions")
+        log(f"reconciled envcloak permissions in {path} "
+            "(allow MCP tools; retract any .env deny rules that break auto mode)")
     log("restart Claude Code so the MCP server, hook, and permission rules take effect")
     print(resolved)
     return 0
