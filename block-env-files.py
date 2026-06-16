@@ -15,7 +15,7 @@ Protected = basename `.env` or `.env.<suffix>`, EXCEPT example/template files
 (`.env.example`, `.env.sample`, `.env.template`, `.env.dist`, `.env.schema`),
 which carry no secrets and stay readable.
 
-Secrets should be read through the env-guard MCP (`env_read`), which returns a
+Secrets should be read through the envcloak MCP (`env_read`), which returns a
 masked, length-preserving view instead of raw values.
 """
 
@@ -30,7 +30,7 @@ BASH_ENV_TOKEN = re.compile(r"""(?:^|[\s=:"'(<>|&;/])(\.env(?:\.[A-Za-z0-9_.-]+)
 # an @-mention of a .env file in a user prompt
 MENTION_ENV = re.compile(r"@(?:[^\s\"']*/)?(\.env(?:\.[A-Za-z0-9_.-]+)?)\b")
 
-ADVICE = "Use the env-guard MCP (env_read) for a masked, safe view."
+ADVICE = "Use the envcloak MCP (env_read) for a masked, safe view."
 
 
 def is_protected_basename(base: str) -> bool:

@@ -1,4 +1,4 @@
-"""env-guard core: a safe, length-preserving dotenv reader/editor.
+"""envcloak core: a safe, length-preserving dotenv reader/editor.
 
 This module is pure logic (no I/O, no MCP) so it can be unit-tested in isolation.
 

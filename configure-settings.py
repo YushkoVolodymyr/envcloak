@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Idempotently merge env-guard protections into a Claude Code settings.json.
+"""Idempotently merge envcloak protections into a Claude Code settings.json.
 
 Usage: configure-settings.py <settings.json path> [hook_command]
 
 Applies (adding only what is missing, preserving everything else):
-  permissions.allow  += "mcp__env-guard"      -> allow ONLY this MCP server
+  permissions.allow  += "mcp__envcloak"      -> allow ONLY this MCP server
   permissions.deny   += .env wildcards        -> block every real .env file
   hooks.PreToolUse   += block-env-files.py    -> deterministic enforcement
 
@@ -16,7 +16,7 @@ import os
 import shutil
 import sys
 
-ALLOW = ["mcp__env-guard"]
+ALLOW = ["mcp__envcloak"]
 DENY = [
     "Read(.env)", "Read(.env.*)", "Read(**/.env)", "Read(**/.env.*)",
     "Edit(.env)", "Edit(.env.*)", "Edit(**/.env)", "Edit(**/.env.*)",

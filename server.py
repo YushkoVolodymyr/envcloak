@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""env-guard MCP server (stdio, zero dependencies).
+"""envcloak MCP server (stdio, zero dependencies).
 
 Exposes env-file tools to an agent while never revealing real secret values:
 reads return a length-preserving *blurred* view, and edits never require the
@@ -17,9 +17,9 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import envguard_core as eg  # noqa: E402
+import envcloak_core as eg  # noqa: E402
 
-SERVER_NAME = "env-guard"
+SERVER_NAME = "envcloak"
 SERVER_VERSION = "1.0.0"
 PROTOCOL_VERSION = "2024-11-05"
 
@@ -28,7 +28,7 @@ ENV_BASENAME_HINTS = (".env",)
 
 
 def log(*args) -> None:
-    print("[env-guard]", *args, file=sys.stderr, flush=True)
+    print("[envcloak]", *args, file=sys.stderr, flush=True)
 
 
 def load_config() -> dict:
@@ -74,7 +74,7 @@ def write_file_atomic(path: str, content: str) -> None:
     mode = None
     if os.path.exists(path):
         mode = os.stat(path).st_mode
-    fd, tmp = tempfile.mkstemp(dir=d, prefix=".env-guard.", suffix=".tmp")
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".envcloak.", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(content)

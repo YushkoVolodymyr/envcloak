@@ -1,4 +1,4 @@
-# env-guard
+# envcloak
 
 A tiny **MCP server** that lets a Claude Code agent read and edit `.env` files
 **without ever seeing real secret values** — while keeping the file informative
@@ -55,8 +55,9 @@ empty values. Edit the list in [`config.json`](./config.json).
   overwriting via `env_create_file`).
 
 To make this airtight, the agent must not be able to read env files any other
-way (Read tool, `cat`, grep, an `@`-mention, …). The **installer does this for
-you** — see [Install](#install). It enforces, at user scope, a `PreToolUse`
+way (Read tool, `cat`, grep, an `@`-mention, …). The **plugin (or installer)
+does this for you** — see [Install](#install-as-a-claude-code-plugin-recommended).
+It enforces, at user scope, a `PreToolUse`
 hook ([`block-env-files.py`](./block-env-files.py)) plus `permissions.deny`
 wildcards, so `.env` files are blocked across every project regardless of which
 directory Claude is launched from. (Settings deny rules only load for the exact
@@ -77,20 +78,20 @@ project root you launch in — a hook is what makes it global and reliable.)
 
 ## Install as a Claude Code plugin (recommended)
 
-env-guard ships as a self-contained plugin: installing it registers the
-`env-guard` MCP server **and** wires the `.env`-blocking hook for you — no
+envcloak ships as a self-contained plugin: installing it registers the
+`envcloak` MCP server **and** wires the `.env`-blocking hook for you — no
 manual `settings.json` editing. The repo is its own marketplace, so:
 
 ```text
 # In Claude Code:
-/plugin marketplace add YushkoVolodymyr/env-guard
-/plugin install env-guard@env-guard
+/plugin marketplace add YushkoVolodymyr/envcloak
+/plugin install envcloak@envcloak
 ```
 
 Then restart Claude Code (or run `/hooks`). Verify with:
 
 ```bash
-claude mcp list        # -> env-guard: ... ✔ Connected
+claude mcp list        # -> envcloak: ... ✔ Connected
 ```
 
 Requirement: `python3` on PATH (the MCP server and hook are launched as
@@ -98,7 +99,7 @@ Requirement: `python3` on PATH (the MCP server and hook are launched as
 
 What the plugin activates (in every project, while enabled):
 
-- the **`env-guard` MCP server** (the `env_read` / `env_set_value` / … tools);
+- the **`envcloak` MCP server** (the `env_read` / `env_set_value` / … tools);
 - a **`PreToolUse` hook** that blocks raw `.env` access via
   `Read`/`Edit`/`Write`/`Grep`/`Glob`/`Bash`;
 - a **`UserPromptSubmit` hook** that blocks `@`-mentions of `.env` files.
@@ -108,7 +109,7 @@ What the plugin activates (in every project, while enabled):
 Example/template files (`.env.example`, `.env.sample`, `.env.template`,
 `.env.dist`, `.env.schema`) carry no secrets and stay readable.
 
-Disable or remove anytime with `/plugin` (or `/plugin uninstall env-guard@env-guard`).
+Disable or remove anytime with `/plugin` (or `/plugin uninstall envcloak@envcloak`).
 
 > A plugin cannot ship `permissions.deny` entries, so the hook is the
 > enforcement mechanism (it covers every tool + `@`-mentions, which deny rules
@@ -121,13 +122,13 @@ Requirements: `python3` and the `claude` CLI on PATH.
 
 ```bash
 # 1. Put this folder anywhere, e.g.
-git clone <repo> ~/.claude/mcp-servers/env-guard   # or copy the folder
+git clone <repo> ~/.claude/mcp-servers/envcloak   # or copy the folder
 
 # 2. Run the installer
-~/.claude/mcp-servers/env-guard/install.sh
+~/.claude/mcp-servers/envcloak/install.sh
 
 # 3. Restart Claude Code (or run /hooks), then verify:
-claude mcp list        # -> env-guard: ... ✔ Connected
+claude mcp list        # -> envcloak: ... ✔ Connected
 ```
 
 The installer is **idempotent** and path-agnostic (works wherever the folder
@@ -135,10 +136,10 @@ lives). It edits only user-global config (`~/.claude/`), backing up
 `settings.json` to `settings.json.bak` first, and does four things:
 
 1. Runs the test suite.
-2. Registers the `env-guard` MCP server at **user scope** (all projects).
+2. Registers the `envcloak` MCP server at **user scope** (all projects).
 3. Installs the `PreToolUse` hook to `~/.claude/hooks/block-env-files.py`.
 4. Merges into `~/.claude/settings.json` (adding only what's missing):
-   - `permissions.allow += "mcp__env-guard"` — runs **only this** MCP server
+   - `permissions.allow += "mcp__envcloak"` — runs **only this** MCP server
      without a prompt; every other MCP keeps prompting as usual.
    - `permissions.deny += .env wildcards` — blocks `Read`/`Edit`/`Write`/`Grep`
      of `.env*`.
@@ -151,15 +152,15 @@ same script — see the installer's closing note.
 Manual MCP registration only (no hook/settings), equivalent to step 2:
 
 ```bash
-claude mcp add env-guard -s user -- python3 /ABSOLUTE/PATH/TO/env-guard/server.py
+claude mcp add envcloak -s user -- python3 /ABSOLUTE/PATH/TO/envcloak/server.py
 ```
 
 Scopes: `-s user` = all your projects (recommended). Use `-s project` to commit
 a `.mcp.json` and share via the repo instead.
 
-Uninstall: `claude mcp remove env-guard -s user`, delete
-`~/.claude/hooks/block-env-files.py`, and remove the `env-guard` entries from
-`~/.claude/settings.json` (`mcp__env-guard`, the `.env` denies, the PreToolUse
+Uninstall: `claude mcp remove envcloak -s user`, delete
+`~/.claude/hooks/block-env-files.py`, and remove the `envcloak` entries from
+`~/.claude/settings.json` (`mcp__envcloak`, the `.env` denies, the PreToolUse
 hook).
 
 ## Configure
@@ -189,7 +190,7 @@ hook).
 python3 -m unittest -v          # run the 33 tests
 ```
 
-`envguard_core.py` is pure logic (parse / blur / edit) and has no I/O, so it is
+`envcloak_core.py` is pure logic (parse / blur / edit) and has no I/O, so it is
 trivially testable. `server.py` is the thin MCP/JSON-RPC stdio wrapper.
 
 ## Known limitations

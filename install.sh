@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# env-guard installer — full setup for a teammate's Claude Code (user scope).
+# envcloak installer — full setup for a teammate's Claude Code (user scope).
 # Path-agnostic: works from wherever this folder lives.
 #
 # It will:
 #   1. run the test suite
-#   2. register the env-guard MCP server (user scope)
+#   2. register the envcloak MCP server (user scope)
 #   3. install the PreToolUse hook into ~/.claude/hooks/
 #   4. patch ~/.claude/settings.json (idempotently): deny all real .env files,
-#      allow ONLY the env-guard MCP server, and wire the hook
+#      allow ONLY the envcloak MCP server, and wire the hook
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,10 +25,10 @@ echo "1/4 Running tests…"
 ( cd "$DIR" && python3 -m unittest >/dev/null 2>&1 ) && echo "    tests OK" || {
   echo "    tests FAILED — aborting" >&2; exit 1; }
 
-echo "2/4 Registering env-guard MCP server (user scope)…"
+echo "2/4 Registering envcloak MCP server (user scope)…"
 chmod +x "$SERVER"
-claude mcp remove env-guard -s user >/dev/null 2>&1 || true
-claude mcp add env-guard -s user -- python3 "$SERVER"
+claude mcp remove envcloak -s user >/dev/null 2>&1 || true
+claude mcp add envcloak -s user -- python3 "$SERVER"
 
 echo "3/4 Installing PreToolUse hook -> $HOOKS_DIR/block-env-files.py"
 mkdir -p "$HOOKS_DIR"
@@ -43,9 +43,9 @@ cat <<'EOF'
 Done. Restart Claude Code (or run /hooks) to load the changes.
 
 Now active in every project:
-  • env-guard MCP allowed (and ONLY this server runs without a prompt)
+  • envcloak MCP allowed (and ONLY this server runs without a prompt)
   • all real .env files blocked from Read / Edit / Write / Grep / Bash
-  • read secrets via env-guard tools (env_read returns a masked, safe view)
+  • read secrets via envcloak tools (env_read returns a masked, safe view)
 
 Example/template files (.env.example, .env.sample, .env.template, .env.dist,
 .env.schema) stay readable via the hook.

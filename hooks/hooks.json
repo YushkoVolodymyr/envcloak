@@ -1,5 +1,5 @@
 {
-  "description": "env-guard: block raw access to real .env files (Read/Edit/Write/Grep/Glob/Bash and @-mentions). Secrets must be read through the env-guard MCP (env_read), which returns a masked, length-preserving view. Example/template files (.env.example, .env.sample, .env.template, .env.dist, .env.schema) stay readable.",
+  "description": "envcloak: block raw access to real .env files (Read/Edit/Write/Grep/Glob/Bash and @-mentions). Secrets must be read through the envcloak MCP (env_read), which returns a masked, length-preserving view. Example/template files (.env.example, .env.sample, .env.template, .env.dist, .env.schema) stay readable.",
   "hooks": {
     "PreToolUse": [
       {

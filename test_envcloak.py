@@ -1,8 +1,8 @@
-"""Unit tests for envguard_core. Run: python3 -m unittest -v"""
+"""Unit tests for envcloak_core. Run: python3 -m unittest -v"""
 
 import unittest
 
-import envguard_core as eg
+import envcloak_core as eg
 
 SAMPLE = """\
 # Database config

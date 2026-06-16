@@ -1,13 +1,13 @@
 {
-  "name": "env-guard",
+  "name": "envcloak",
   "version": "1.0.0",
   "description": "Read and edit .env files from Claude Code without ever exposing real secret values. Ships an MCP server that returns a length-preserving, blurred view plus a PreToolUse hook that blocks raw .env access.",
   "author": {
     "name": "Yushko Volodymyr",
     "email": "youshko.vladimir@gmail.com"
   },
-  "repository": "https://github.com/YushkoVolodymyr/env-guard",
-  "homepage": "https://github.com/YushkoVolodymyr/env-guard",
+  "repository": "https://github.com/YushkoVolodymyr/envcloak",
+  "homepage": "https://github.com/YushkoVolodymyr/envcloak",
   "license": "MIT",
   "keywords": [
     "claude-code",
