@@ -55,13 +55,12 @@ empty values. Edit the list in [`config.json`](./config.json).
   overwriting via `env_create_file`).
 
 To make this airtight, the agent must not be able to read env files any other
-way (Read tool, `cat`, grep, an `@`-mention, …). The **plugin (or installer)
-does this for you** — see [Install](#install-as-a-claude-code-plugin-recommended).
-It enforces, at user scope, a `PreToolUse`
-hook ([`block-env-files.py`](./block-env-files.py)) plus `permissions.deny`
-wildcards, so `.env` files are blocked across every project regardless of which
-directory Claude is launched from. (Settings deny rules only load for the exact
-project root you launch in — a hook is what makes it global and reliable.)
+way (Read tool, `cat`, grep, an `@`-mention, …). The **plugin does this for
+you** — see [Install](#install-as-a-claude-code-plugin-recommended). It ships a
+`PreToolUse` hook ([`block-env-files.py`](./block-env-files.py)) that blocks
+`.env` access across every project, no matter which directory Claude is launched
+from. (A hook is what makes this global and reliable — settings `permissions.deny`
+rules only load for the exact project root you launch in.)
 
 ## Tools
 
@@ -102,66 +101,36 @@ What the plugin activates (in every project, while enabled):
 - the **`envcloak` MCP server** (the `env_read` / `env_set_value` / … tools);
 - a **`PreToolUse` hook** that blocks raw `.env` access via
   `Read`/`Edit`/`Write`/`Grep`/`Glob`/`Bash`;
-- a **`UserPromptSubmit` hook** that blocks `@`-mentions of `.env` files.
-  (The manual installer below leaves this `@`-mention guard *off* by default;
-  the plugin turns it *on* — a stronger default for a security tool.)
+- a **`UserPromptSubmit` hook** that blocks `@`-mentions of `.env` files
+  (an `@`-mention would otherwise inline raw secrets, bypassing the tool gate).
 
 Example/template files (`.env.example`, `.env.sample`, `.env.template`,
 `.env.dist`, `.env.schema`) carry no secrets and stay readable.
 
 Disable or remove anytime with `/plugin` (or `/plugin uninstall envcloak@envcloak`).
 
-> A plugin cannot ship `permissions.deny` entries, so the hook is the
-> enforcement mechanism (it covers every tool + `@`-mentions, which deny rules
-> alone do not). If you also want belt-and-suspenders `permissions.deny`
-> wildcards, add them via the manual installer or your own `settings.json`.
+## Optional: extra hardening with `permissions.deny`
 
-## Install manually (without the plugin)
+The hook is the real enforcement — it blocks every tool *and* `@`-mentions,
+which settings denies alone can't. A plugin can't ship `permissions.deny`
+entries, so if you also want belt-and-suspenders settings-level denies, add
+these to your `~/.claude/settings.json` by hand:
 
-Requirements: `python3` and the `claude` CLI on PATH.
-
-```bash
-# 1. Put this folder anywhere, e.g.
-git clone <repo> ~/.claude/mcp-servers/envcloak   # or copy the folder
-
-# 2. Run the installer
-~/.claude/mcp-servers/envcloak/install.sh
-
-# 3. Restart Claude Code (or run /hooks), then verify:
-claude mcp list        # -> envcloak: ... ✔ Connected
+```json
+{
+  "permissions": {
+    "deny": [
+      "Read(.env)", "Read(.env.*)", "Read(**/.env)", "Read(**/.env.*)",
+      "Edit(.env)", "Edit(.env.*)", "Edit(**/.env)", "Edit(**/.env.*)",
+      "Write(.env)", "Write(.env.*)", "Write(**/.env)", "Write(**/.env.*)",
+      "Grep(**/.env*)"
+    ]
+  }
+}
 ```
 
-The installer is **idempotent** and path-agnostic (works wherever the folder
-lives). It edits only user-global config (`~/.claude/`), backing up
-`settings.json` to `settings.json.bak` first, and does four things:
-
-1. Runs the test suite.
-2. Registers the `envcloak` MCP server at **user scope** (all projects).
-3. Installs the `PreToolUse` hook to `~/.claude/hooks/block-env-files.py`.
-4. Merges into `~/.claude/settings.json` (adding only what's missing):
-   - `permissions.allow += "mcp__envcloak"` — runs **only this** MCP server
-     without a prompt; every other MCP keeps prompting as usual.
-   - `permissions.deny += .env wildcards` — blocks `Read`/`Edit`/`Write`/`Grep`
-     of `.env*`.
-   - `hooks.PreToolUse` — wires the hook (the reliable, global enforcement).
-
-By default the **`@`-mention guard is off** (it's commented at the end of the
-installer output). Enable it by adding a `UserPromptSubmit` hook pointing at the
-same script — see the installer's closing note.
-
-Manual MCP registration only (no hook/settings), equivalent to step 2:
-
-```bash
-claude mcp add envcloak -s user -- python3 /ABSOLUTE/PATH/TO/envcloak/server.py
-```
-
-Scopes: `-s user` = all your projects (recommended). Use `-s project` to commit
-a `.mcp.json` and share via the repo instead.
-
-Uninstall: `claude mcp remove envcloak -s user`, delete
-`~/.claude/hooks/block-env-files.py`, and remove the `envcloak` entries from
-`~/.claude/settings.json` (`mcp__envcloak`, the `.env` denies, the PreToolUse
-hook).
+These only load for the project root you launch Claude in — which is exactly why
+envcloak relies on the global hook instead. They're purely additive.
 
 ## Configure
 
