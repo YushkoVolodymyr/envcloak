@@ -56,11 +56,20 @@ empty values. Edit the list in [`config.json`](./config.json).
 
 To make this airtight, the agent must not be able to read env files any other
 way (Read tool, `cat`, grep, …). The **plugin does this for
-you** — see [Install](#install-as-a-claude-code-plugin-recommended). It ships a
-`PreToolUse` hook ([`block-env-files.py`](./block-env-files.py)) that blocks
-`.env` access across every project, no matter which directory Claude is launched
-from. (A hook is what makes this global and reliable — settings `permissions.deny`
-rules only load for the exact project root you launch in.)
+you** — see [Install](#install-as-a-claude-code-plugin-recommended) — with two
+complementary layers:
+
+1. **A `PreToolUse` hook** ([`block-env-files.py`](./block-env-files.py)) — the
+   airtight enforcer. It blocks `.env` access across every project no matter
+   which directory Claude is launched from, and covers the cases settings can't:
+   `Bash` (`cat`/`grep`/wildcards/exfiltration) and exotic suffixes.
+2. **Permission deny rules** baked into `~/.claude/settings.json` at SessionStart
+   (alongside an allow rule for the `envcloak` MCP). Deny rules are evaluated
+   *before* the tool runs, so the agent is steered to `env_read` from the first
+   call instead of being blocked mid-attempt — and the MCP path never prompts.
+   They deny `Read`/`Edit`/`Write` on the wildcard globs `.env` and `.env.*`,
+   extended with anything in [`config.json`](./config.json) → `allowed_path_globs`
+   (re-read on every `/plugin` reload).
 
 ## Tools
 
@@ -122,8 +131,11 @@ Zero Python dependencies.
 
 What the plugin activates (in every project, while enabled):
 
-- a **`SessionStart` hook** that auto-detects a working Python interpreter and
-  bakes it into `~/.claude/settings.json` (see the requirement note above);
+- a **`SessionStart` hook** that (a) auto-detects a working Python interpreter
+  and bakes it into `~/.claude/settings.json` (see the requirement note above),
+  (b) merges `.env` `permissions.deny` rules + an `mcp__envcloak` `allow` rule
+  into the same file, and (c) injects a one-line reminder into the session so the
+  agent reaches for `env_read` first;
 - the **`envcloak` MCP server** (the `env_read` / `env_set_value` / … tools);
 - a **`PreToolUse` hook** that blocks raw `.env` access via
   `Read`/`Edit`/`Write`/`Grep`/`Glob`/`Bash`. The `Bash` gate covers bash,
@@ -138,28 +150,38 @@ Example/template files (`.env.example`, `.env.sample`, `.env.template`,
 
 Disable or remove anytime with `/plugin` (or `/plugin uninstall envcloak@envcloak`).
 
-## Optional: extra hardening with `permissions.deny`
+## Permission rules (automatic)
 
-The hook is the real enforcement — it blocks every tool, which settings
-denies alone can't. A plugin can't ship `permissions.deny`
-entries, so if you also want belt-and-suspenders settings-level denies, add
-these to your `~/.claude/settings.json` by hand:
+The `SessionStart` hook injects these into `~/.claude/settings.json` for you —
+no manual editing — and is idempotent (it only adds what's missing and preserves
+your existing rules):
 
 ```json
 {
   "permissions": {
     "deny": [
-      "Read(.env)", "Read(.env.*)", "Read(**/.env)", "Read(**/.env.*)",
-      "Edit(.env)", "Edit(.env.*)", "Edit(**/.env)", "Edit(**/.env.*)",
-      "Write(.env)", "Write(.env.*)", "Write(**/.env)", "Write(**/.env.*)",
-      "Grep(**/.env*)"
-    ]
+      "Read(.env)", "Read(.env.*)",
+      "Edit(.env)", "Edit(.env.*)",
+      "Write(.env)", "Write(.env.*)"
+    ],
+    "allow": ["mcp__envcloak"]
   }
 }
 ```
 
-These only load for the project root you launch Claude in — which is exactly why
-envcloak relies on the global hook instead. They're purely additive.
+The deny globs are **wildcards** (`.env.*` covers every suffix), so by default
+they also cover template files (`.env.example`, `.env.sample`, …) — read those
+through the MCP too, or narrow the patterns if you want them raw-readable. The
+set is **config-driven**: it's `.env` + `.env.*` plus every entry in
+[`config.json`](./config.json) → `allowed_path_globs`, re-read on each `/plugin`
+reload (a new SessionStart). Editing the config and reloading adds matching deny
+rules automatically.
+
+Notes: merging is additive — *removing* a glob from the config does not retract
+an already-written rule, and the rules persist after uninstall (a plugin can't
+clean up user settings on removal). Delete the `.env` entries by hand if you no
+longer want them. The `PreToolUse` hook remains the airtight catch-all (Bash,
+exfiltration, …) regardless of these rules.
 
 ## Configure
 
@@ -180,7 +202,10 @@ envcloak relies on the global hook instead. They're purely additive.
   run can be a secret).
 - `partial_reveal` — keep N real chars at each end of a masked value
   (dashboard-style "ends in a3f2"). `0` = fully masked. Leaks a few bytes when set.
-- `allowed_path_globs` — extra path/basename globs beyond `*.env`.
+- `allowed_path_globs` — extra path/basename globs beyond `*.env`. These extend
+  **both** what the MCP will touch **and** the `permissions.deny` rules baked at
+  SessionStart (so a custom env-file location is raw-denied *and* MCP-readable).
+  Changes apply on the next `/plugin` reload + restart.
 
 ## Develop / test
 

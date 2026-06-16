@@ -1,6 +1,6 @@
 {
   "name": "envcloak",
-  "version": "1.2.0",
+  "version": "1.0.0",
   "description": "Read and edit .env files from Claude Code without ever exposing real secret values. Ships an MCP server that returns a length-preserving, blurred view plus a PreToolUse hook that blocks raw .env access.",
   "author": {
     "name": "Yushko Volodymyr",

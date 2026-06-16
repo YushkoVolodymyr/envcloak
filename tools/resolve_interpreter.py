@@ -36,6 +36,57 @@ import tempfile
 MIN_VERSION = (3, 8)
 ENV_KEY = "ENVCLOAK_PYTHON"
 
+# .env files whose raw access we steer the agent away from at the *permission*
+# layer (deny-first: Claude Code skips the tool before it runs, so the agent
+# falls back to the envcloak MCP from the first call instead of being blocked
+# mid-attempt). The PreToolUse hook remains the airtight enforcer (Bash,
+# exfiltration, …); these wildcard globs are the steering layer.
+#
+# Wildcards, not an enumerated suffix list: `.env.*` matches every `.env.<x>`
+# (including templates like `.env.example` — pass them through the MCP, or narrow
+# `allowed_path_globs` if you want them raw-readable). `.env` and `.env.*` are
+# matched at any depth by Claude Code's gitignore-style rules.
+BASE_PROTECTED_GLOBS = (".env", ".env.*")
+DENY_TOOLS = ("Read", "Edit", "Write")
+# Auto-approve the secure path so the fallback never prompts.
+ALLOW_RULES = ("mcp__envcloak",)
+
+
+def plugin_root() -> str:
+    """Plugin install root (honours CLAUDE_PLUGIN_ROOT; else this file's parent)."""
+    root = os.environ.get("CLAUDE_PLUGIN_ROOT")
+    if root:
+        return root
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def load_protected_globs() -> list:
+    """Env-file globs to deny: the wildcard base plus config.json's
+    ``allowed_path_globs``.
+
+    Read fresh on every run, so editing config.json and re-running SessionStart
+    (which a `/plugin` reload triggers) updates the deny rules. Additive only —
+    removing a pattern from config does not retract an already-written rule.
+    """
+    globs = list(BASE_PROTECTED_GLOBS)
+    try:
+        with open(os.path.join(plugin_root(), "config.json"), encoding="utf-8") as f:
+            extra = json.load(f).get("allowed_path_globs")
+        if isinstance(extra, list):
+            for g in extra:
+                if isinstance(g, str) and g and g not in globs:
+                    globs.append(g)
+    except FileNotFoundError:
+        pass
+    except Exception as e:  # noqa: BLE001 - a bad config must never break the session
+        log(f"config.json ignored for deny rules: {e}")
+    return globs
+
+
+def build_deny_rules(globs) -> list:
+    """Cartesian product of the denied tools and the protected globs."""
+    return [f"{tool}({g})" for tool in DENY_TOOLS for g in globs]
+
 
 def log(*args: object) -> None:
     print("[envcloak resolve-python]", *args, file=sys.stderr, flush=True)
@@ -82,6 +133,32 @@ def atomic_write(path: str, data: dict) -> None:
                 pass
 
 
+def merge_permissions(data: dict, deny_rules) -> bool:
+    """Add envcloak's deny/allow rules to ``permissions`` if missing.
+
+    Idempotent and additive: existing rules (and their order) are preserved;
+    only missing entries are appended. Returns True iff anything was added.
+    """
+    changed = False
+    perms = data.get("permissions")
+    if not isinstance(perms, dict):
+        perms = {}
+    for bucket, rules in (("deny", deny_rules), ("allow", ALLOW_RULES)):
+        existing = perms.get(bucket)
+        if not isinstance(existing, list):
+            existing = []
+        seen = set(existing)
+        for rule in rules:
+            if rule not in seen:
+                existing.append(rule)
+                seen.add(rule)
+                changed = True
+        perms[bucket] = existing
+    if changed:
+        data["permissions"] = perms
+    return changed
+
+
 def write_cache(resolved: str, version: str) -> None:
     """Best-effort diagnostic cache under the plugin's persistent data dir."""
     data_dir = os.environ.get("CLAUDE_PLUGIN_DATA")
@@ -122,16 +199,23 @@ def main() -> int:
     env = data.get("env")
     if not isinstance(env, dict):
         env = {}
+    env_changed = env.get(ENV_KEY) != resolved
+    if env_changed:
+        env[ENV_KEY] = resolved
+        data["env"] = env
 
-    if env.get(ENV_KEY) == resolved:
+    perms_changed = merge_permissions(data, build_deny_rules(load_protected_globs()))
+
+    if not (env_changed or perms_changed):
         print(resolved)  # already baked; nothing to do
         return 0
 
-    env[ENV_KEY] = resolved
-    data["env"] = env
     atomic_write(path, data)
-    log(f"baked {ENV_KEY}={resolved} into {path}")
-    log("restart Claude Code so the MCP server and hook pick up this interpreter")
+    if env_changed:
+        log(f"baked {ENV_KEY}={resolved} into {path}")
+    if perms_changed:
+        log(f"added envcloak .env deny/allow rules to {path} -> permissions")
+    log("restart Claude Code so the MCP server, hook, and permission rules take effect")
     print(resolved)
     return 0
 

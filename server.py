@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import envcloak_core as eg  # noqa: E402
 
 SERVER_NAME = "envcloak"
-SERVER_VERSION = "1.2.0"
+SERVER_VERSION = "1.0.0"
 PROTOCOL_VERSION = "2024-11-05"
 
 # Only files that look like env files may be touched (defensive default).
@@ -96,8 +96,7 @@ def blurred_report(path: str, text: str) -> str:
     masked = sum(1 for r in rows if not r["revealed"])
     lines = [
         f"# {path}  ({len(rows)} vars, {masked} masked, {len(rows) - masked} revealed)",
-        "# NOTE: masked values are FAKE (letters->x/X, digits->0). Same length & "
-        "structure as the real value. Do NOT write a masked value back.",
+        "# masked values are FAKE (real length/shape kept, content hidden) — never write one back.",
         "",
         blurred.rstrip("\n"),
         "",

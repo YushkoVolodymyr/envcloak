@@ -63,6 +63,96 @@ class TestLoadSettings(unittest.TestCase):
         self.assertFalse(ok)
 
 
+_WILDCARD_DENY = ri.build_deny_rules(ri.BASE_PROTECTED_GLOBS)
+
+
+class TestDenyRules(unittest.TestCase):
+    def test_wildcard_not_enumerated(self):
+        rules = ri.build_deny_rules(ri.BASE_PROTECTED_GLOBS)
+        self.assertEqual(set(rules), {
+            "Read(.env)", "Read(.env.*)",
+            "Edit(.env)", "Edit(.env.*)",
+            "Write(.env)", "Write(.env.*)",
+        })
+
+    def test_build_deny_rules_uses_given_globs(self):
+        rules = ri.build_deny_rules(["config/*.env"])
+        self.assertEqual(set(rules), {
+            "Read(config/*.env)", "Edit(config/*.env)", "Write(config/*.env)",
+        })
+
+
+class TestLoadProtectedGlobs(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self._old = os.environ.get("CLAUDE_PLUGIN_ROOT")
+        os.environ["CLAUDE_PLUGIN_ROOT"] = self.dir
+
+    def tearDown(self):
+        if self._old is None:
+            os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
+        else:
+            os.environ["CLAUDE_PLUGIN_ROOT"] = self._old
+
+    def _write_config(self, obj):
+        with open(os.path.join(self.dir, "config.json"), "w", encoding="utf-8") as f:
+            json.dump(obj, f)
+
+    def test_base_when_no_config(self):
+        self.assertEqual(ri.load_protected_globs(), list(ri.BASE_PROTECTED_GLOBS))
+
+    def test_extends_with_allowed_path_globs(self):
+        self._write_config({"allowed_path_globs": ["config/*.env", "secrets/*"]})
+        globs = ri.load_protected_globs()
+        self.assertEqual(globs[:2], list(ri.BASE_PROTECTED_GLOBS))
+        self.assertIn("config/*.env", globs)
+        self.assertIn("secrets/*", globs)
+
+    def test_ignores_duplicates_and_non_strings(self):
+        self._write_config({"allowed_path_globs": [".env", 123, "", "x/*.env"]})
+        globs = ri.load_protected_globs()
+        self.assertEqual(globs.count(".env"), 1)
+        self.assertIn("x/*.env", globs)
+
+    def test_bad_config_falls_back_to_base(self):
+        with open(os.path.join(self.dir, "config.json"), "w", encoding="utf-8") as f:
+            f.write("{ not json")
+        self.assertEqual(ri.load_protected_globs(), list(ri.BASE_PROTECTED_GLOBS))
+
+
+class TestMergePermissions(unittest.TestCase):
+    def test_adds_deny_and_allow_to_empty(self):
+        data = {}
+        self.assertTrue(ri.merge_permissions(data, _WILDCARD_DENY))
+        perms = data["permissions"]
+        self.assertEqual(perms["allow"], ["mcp__envcloak"])
+        self.assertIn("Read(.env)", perms["deny"])
+        self.assertIn("Read(.env.*)", perms["deny"])
+        self.assertIn("Write(.env.*)", perms["deny"])
+
+    def test_idempotent_no_duplicates(self):
+        data = {}
+        ri.merge_permissions(data, _WILDCARD_DENY)
+        self.assertFalse(ri.merge_permissions(data, _WILDCARD_DENY))  # nothing new
+        deny = data["permissions"]["deny"]
+        self.assertEqual(len(deny), len(set(deny)))
+        self.assertEqual(data["permissions"]["allow"].count("mcp__envcloak"), 1)
+
+    def test_preserves_existing_rules_and_order(self):
+        data = {"permissions": {"deny": ["Read(secrets.txt)"], "allow": ["Bash(ls:*)"]}}
+        ri.merge_permissions(data, _WILDCARD_DENY)
+        self.assertEqual(data["permissions"]["deny"][0], "Read(secrets.txt)")
+        self.assertEqual(data["permissions"]["allow"][0], "Bash(ls:*)")
+        self.assertIn("mcp__envcloak", data["permissions"]["allow"])
+        self.assertIn("Read(.env)", data["permissions"]["deny"])
+
+    def test_tolerates_non_list_buckets(self):
+        data = {"permissions": {"deny": "oops", "allow": None}}
+        self.assertTrue(ri.merge_permissions(data, _WILDCARD_DENY))
+        self.assertIsInstance(data["permissions"]["deny"], list)
+        self.assertIn("Read(.env)", data["permissions"]["deny"])
+
+
 class TestMainBake(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
