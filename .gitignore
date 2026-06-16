@@ -8,6 +8,4 @@ venv/
 .env
 .env.*
 !.env.example
-
-# Local, machine-specific Claude Code memory (not shared)
 CLAUDE.local.md
