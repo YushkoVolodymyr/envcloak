@@ -164,10 +164,16 @@ your existing rules):
       "Edit(.env)", "Edit(.env.*)",
       "Write(.env)", "Write(.env.*)"
     ],
-    "allow": ["mcp__envcloak"]
+    "allow": ["mcp__envcloak", "mcp__envcloak__env_read", "…"]
   }
 }
 ```
+
+The `allow` list includes both the server-wide `mcp__envcloak` (for interactive
+modes) **and** every tool by name (`mcp__envcloak__env_read`, …). The per-tool
+entries matter in `dontAsk` / "auto" mode, which auto-denies any tool not matched
+by name in `permissions.allow` — without them the secure `env_read` call is
+rejected there.
 
 The deny globs are **wildcards** (`.env.*` covers every suffix), so by default
 they also cover template files (`.env.example`, `.env.sample`, …) — read those

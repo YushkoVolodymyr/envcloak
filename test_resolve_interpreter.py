@@ -125,7 +125,10 @@ class TestMergePermissions(unittest.TestCase):
         data = {}
         self.assertTrue(ri.merge_permissions(data, _WILDCARD_DENY))
         perms = data["permissions"]
-        self.assertEqual(perms["allow"], ["mcp__envcloak"])
+        self.assertIn("mcp__envcloak", perms["allow"])
+        # explicit per-tool entries are required for dontAsk ("auto") mode
+        self.assertIn("mcp__envcloak__env_read", perms["allow"])
+        self.assertIn("mcp__envcloak__env_set_value", perms["allow"])
         self.assertIn("Read(.env)", perms["deny"])
         self.assertIn("Read(.env.*)", perms["deny"])
         self.assertIn("Write(.env.*)", perms["deny"])

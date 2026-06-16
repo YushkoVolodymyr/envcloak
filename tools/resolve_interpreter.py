@@ -48,8 +48,22 @@ ENV_KEY = "ENVCLOAK_PYTHON"
 # matched at any depth by Claude Code's gitignore-style rules.
 BASE_PROTECTED_GLOBS = (".env", ".env.*")
 DENY_TOOLS = ("Read", "Edit", "Write")
-# Auto-approve the secure path so the fallback never prompts.
-ALLOW_RULES = ("mcp__envcloak",)
+# Auto-approve the secure path so the fallback never prompts -- and, crucially,
+# is not auto-DENIED in `dontAsk` ("auto") mode, which rejects any tool not
+# matched by name in `permissions.allow`. The server-wide `mcp__envcloak` covers
+# the interactive modes; the explicit per-tool entries are what `dontAsk` matches
+# reliably, so we list every envcloak tool.
+ALLOW_RULES = (
+    "mcp__envcloak",
+    "mcp__envcloak__env_read",
+    "mcp__envcloak__env_set_value",
+    "mcp__envcloak__env_add_key",
+    "mcp__envcloak__env_rename_key",
+    "mcp__envcloak__env_delete_key",
+    "mcp__envcloak__env_replace_range",
+    "mcp__envcloak__env_create_file",
+    "mcp__envcloak__env_delete_file",
+)
 
 
 def plugin_root() -> str:
